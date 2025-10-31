@@ -157,7 +157,29 @@ public struct AnyCodable: Codable, Equatable, Sendable {
     }
     
     public static func == (lhs: AnyCodable, rhs: AnyCodable) -> Bool {
-        // Simple comparison - for production, would need more sophisticated logic
-        "\(lhs.value)" == "\(rhs.value)"
+        // Compare values based on their actual types
+        switch (lhs.value, rhs.value) {
+        case let (l as Bool, r as Bool):
+            return l == r
+        case let (l as Int, r as Int):
+            return l == r
+        case let (l as Double, r as Double):
+            return l == r
+        case let (l as String, r as String):
+            return l == r
+        case let (l as [Any], r as [Any]):
+            guard l.count == r.count else { return false }
+            return zip(l, r).allSatisfy { AnyCodable($0) == AnyCodable($1) }
+        case let (l as [String: Any], r as [String: Any]):
+            guard l.keys.sorted() == r.keys.sorted() else { return false }
+            return l.keys.allSatisfy { key in
+                guard let lval = l[key], let rval = r[key] else { return false }
+                return AnyCodable(lval) == AnyCodable(rval)
+            }
+        case (is NSNull, is NSNull):
+            return true
+        default:
+            return false
+        }
     }
 }

@@ -104,9 +104,9 @@ public final class CausableClient: @unchecked Sendable {
         
         // Generate idempotency key
         if let tenantId = signedSpan.metadata.tenantId,
-           let digest = signedSpan.digest {
-            let idempotencyKey = "\(tenantId)-\(digest)".data(using: .utf8)!.hexString
-            request.setValue(idempotencyKey, forHTTPHeaderField: "X-Idempotency-Key")
+           let digest = signedSpan.digest,
+           let keyData = "\(tenantId)-\(digest)".data(using: .utf8) {
+            request.setValue(keyData.hexString, forHTTPHeaderField: "X-Idempotency-Key")
         }
         
         let encoder = JSONEncoder.causableCanonical

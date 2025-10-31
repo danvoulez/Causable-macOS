@@ -37,6 +37,9 @@ extension Data {
     
     /// Initialize from hexadecimal string
     public init?(hexString: String) {
+        // Validate even length
+        guard hexString.count % 2 == 0 else { return nil }
+        
         let len = hexString.count / 2
         var data = Data(capacity: len)
         var indexIsEven = true

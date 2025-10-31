@@ -26,6 +26,14 @@ public struct OutboxEntry: Sendable {
     }
 }
 
+/// Configuration constants for outbox retry behavior
+private enum OutboxConfig {
+    /// Base backoff time in seconds
+    static let baseBackoffSeconds: Double = 60.0
+    /// Maximum backoff time in seconds (30 minutes)
+    static let maxBackoffSeconds: Double = 30.0 * 60.0
+}
+
 /// SQLite-backed persistent outbox for spans awaiting upload
 public final class OutboxStore: @unchecked Sendable {
     private let db: Connection
@@ -134,7 +142,10 @@ public final class OutboxStore: @unchecked Sendable {
         let newTries = currentTries + 1
         
         // Exponential backoff: 1min, 2min, 4min, 8min, 16min, capped at 30min
-        let backoffSeconds = min(pow(2.0, Double(newTries)) * 60.0, 30.0 * 60.0)
+        let backoffSeconds = min(
+            pow(2.0, Double(newTries)) * OutboxConfig.baseBackoffSeconds,
+            OutboxConfig.maxBackoffSeconds
+        )
         let nextAttempt = Date().addingTimeInterval(backoffSeconds)
         
         try db.run(entry.update(
