@@ -76,7 +76,7 @@
       "id": "PR-MAC-101",
       "epic_id": "EPIC-MAC-001",
       "title": "feat(sdk): Implementar SDK Swift Nativo com Criptografia e Outbox",
-      "status": "todo",
+      "status": "completed",
       "author": "Developer",
       "description": "Cria o framework Swift `@CausableSDK` que servirá como a espinha dorsal de toda a aplicação. Implementa as primitivas de criptografia, a lógica de rede resiliente e o outbox de persistência.",
       "tasks": [
