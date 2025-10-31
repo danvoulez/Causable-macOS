@@ -1,3 +1,0 @@
-module SQLite {
-    header "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/SQLite.build/include/SQLite-Swift.h"
-}
