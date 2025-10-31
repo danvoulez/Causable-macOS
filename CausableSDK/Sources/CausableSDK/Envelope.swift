@@ -37,6 +37,9 @@ public struct SpanMetadata: Codable, Equatable, Sendable {
 
 /// Canonical span envelope as defined in the Blueprint
 public struct SpanEnvelope: Codable, Equatable, Sendable {
+// MARK: - Span Envelope
+
+public struct SpanEnvelope: Codable {
     public let id: String
     public let entityType: String
     public let who: String
@@ -46,6 +49,9 @@ public struct SpanEnvelope: Codable, Equatable, Sendable {
     public let input: [String: AnyCodable]?
     public let output: [String: AnyCodable]?
     public let metadata: SpanMetadata
+    public var input: [String: AnyCodable]
+    public var output: [String: AnyCodable]
+    public var metadata: Metadata
     public let visibility: String
     public var digest: String?
     public var signature: Signature?
@@ -67,6 +73,47 @@ public struct SpanEnvelope: Codable, Equatable, Sendable {
     
     public init(
         id: String,
+    public struct Metadata: Codable {
+        public let tenantId: String?
+        public let ownerId: String?
+        public let deviceId: String?
+        public let ts: String
+        
+        enum CodingKeys: String, CodingKey {
+            case tenantId = "tenant_id"
+            case ownerId = "owner_id"
+            case deviceId = "device_id"
+            case ts
+        }
+        
+        public init(tenantId: String?, ownerId: String?, deviceId: String?, ts: String) {
+            self.tenantId = tenantId
+            self.ownerId = ownerId
+            self.deviceId = deviceId
+            self.ts = ts
+        }
+    }
+    
+    public struct Signature: Codable {
+        public let algo: String
+        public let pubkey: String
+        public let sig: String
+        
+        public init(algo: String, pubkey: String, sig: String) {
+            self.algo = algo
+            self.pubkey = pubkey
+            self.sig = sig
+        }
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case entityType = "entity_type"
+        case who, did, this, status, input, output, metadata, visibility, digest, signature
+    }
+    
+    public init(
+        id: String = UUID().uuidString,
         entityType: String,
         who: String,
         did: String,
@@ -78,6 +125,10 @@ public struct SpanEnvelope: Codable, Equatable, Sendable {
         visibility: String,
         digest: String? = nil,
         signature: Signature? = nil
+        input: [String: AnyCodable] = [:],
+        output: [String: AnyCodable] = [:],
+        metadata: Metadata,
+        visibility: String = "private"
     ) {
         self.id = id
         self.entityType = entityType
@@ -96,6 +147,12 @@ public struct SpanEnvelope: Codable, Equatable, Sendable {
 
 /// A type-erased codable value wrapper to support dynamic JSON structures
 public struct AnyCodable: Codable, Equatable, Sendable {
+    }
+}
+
+// MARK: - AnyCodable
+
+public struct AnyCodable: Codable {
     public let value: Any
     
     public init(_ value: Any) {
@@ -124,6 +181,22 @@ public struct AnyCodable: Codable, Equatable, Sendable {
                 in: container,
                 debugDescription: "Unsupported type"
             )
+        if container.decodeNil() {
+            self.value = NSNull()
+        } else if let bool = try? container.decode(Bool.self) {
+            self.value = bool
+        } else if let int = try? container.decode(Int.self) {
+            self.value = int
+        } else if let double = try? container.decode(Double.self) {
+            self.value = double
+        } else if let string = try? container.decode(String.self) {
+            self.value = string
+        } else if let array = try? container.decode([AnyCodable].self) {
+            self.value = array.map { $0.value }
+        } else if let dictionary = try? container.decode([String: AnyCodable].self) {
+            self.value = dictionary.mapValues { $0.value }
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported type")
         }
     }
     
@@ -131,6 +204,8 @@ public struct AnyCodable: Codable, Equatable, Sendable {
         var container = encoder.singleValueContainer()
         
         switch value {
+        case is NSNull:
+            try container.encodeNil()
         case let bool as Bool:
             try container.encode(bool)
         case let int as Int:
@@ -180,6 +255,9 @@ public struct AnyCodable: Codable, Equatable, Sendable {
             return true
         default:
             return false
+        default:
+            let context = EncodingError.Context(codingPath: container.codingPath, debugDescription: "Unsupported type")
+            throw EncodingError.invalidValue(value, context)
         }
     }
 }

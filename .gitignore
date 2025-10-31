@@ -27,15 +27,37 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+# Swift
+.DS_Store
+.build/
+/Packages
+/*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc
+Package.resolved
+
+# Xcode
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
 
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
-Icon
-._*
 
-# Temporary files
-*.swp
-*~
-.#*
+# Databases
+*.db
+*.sqlite

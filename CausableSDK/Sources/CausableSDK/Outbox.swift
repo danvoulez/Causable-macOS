@@ -39,6 +39,11 @@ public final class OutboxStore: @unchecked Sendable {
     private let db: Connection
     
     // Table definition
+// MARK: - Outbox Store
+
+public final class OutboxStore {
+    private let db: Connection
+    
     private let outbox = Table("outbox")
     private let id = Expression<String>("id")
     private let digest = Expression<String>("digest")
@@ -62,45 +67,44 @@ public final class OutboxStore: @unchecked Sendable {
     }
     
     private func createTableIfNeeded() throws {
+    private let kv = Table("kv")
+    private let key = Expression<String>("key")
+    private let valueJson = Expression<String>("value_json")
+    
+    public init(path: String) throws {
+        self.db = try Connection(path)
+        try createTables()
+    }
+    
+    private func createTables() throws {
         try db.run(outbox.create(ifNotExists: true) { t in
             t.column(id, primaryKey: true)
             t.column(digest, unique: true)
             t.column(spanJson)
-            t.column(tries)
+            t.column(tries, defaultValue: 0)
             t.column(nextAttemptAt)
         })
         
-        // Create index on next_attempt_at for efficient scheduling
         try db.run(outbox.createIndex(nextAttemptAt, ifNotExists: true))
+        
+        try db.run(kv.create(ifNotExists: true) { t in
+            t.column(key, primaryKey: true)
+            t.column(valueJson)
+        })
     }
     
-    /// Add a span to the outbox
-    public func enqueue(span: SpanEnvelope) throws {
-        let encoder = JSONEncoder.causableCanonical
-        guard let spanData = try? encoder.encode(span),
-              let jsonString = String(data: spanData, encoding: .utf8) else {
-            throw OutboxError.encodingError
-        }
-        
-        let digest = span.digest ?? DigestUtils.computeDigest(spanData)
-        
-        let insert = outbox.insert(
-            self.id <- span.id,
+    public func enqueue(spanId: String, digest: String, spanJson: String) throws {
+        let row = outbox.insert(
+            self.id <- spanId,
             self.digest <- digest,
-            self.spanJson <- jsonString,
+            self.spanJson <- spanJson,
             self.tries <- 0,
             self.nextAttemptAt <- Date()
         )
-        
-        do {
-            try db.run(insert)
-        } catch {
-            throw OutboxError.databaseError("Failed to enqueue span: \(error)")
-        }
+        try db.run(row)
     }
     
-    /// Get the next span that should be attempted
-    public func nextAttempt() throws -> OutboxEntry? {
+    public func nextAttempt() throws -> (id: String, spanJson: String)? {
         let now = Date()
         let query = outbox
             .filter(nextAttemptAt <= now)
@@ -111,31 +115,19 @@ public final class OutboxStore: @unchecked Sendable {
             return nil
         }
         
-        return OutboxEntry(
-            id: row[id],
-            digest: row[digest],
-            spanJson: row[spanJson],
-            tries: row[tries],
-            nextAttemptAt: row[nextAttemptAt]
-        )
+        return (id: row[id], spanJson: row[spanJson])
     }
     
-    /// Mark a span as successfully sent and remove from outbox
-    public func markSent(id: String) throws {
-        let entry = outbox.filter(self.id == id)
-        let deleted = try db.run(entry.delete())
-        
-        if deleted == 0 {
-            throw OutboxError.notFound
-        }
+    public func markSuccess(spanId: String) throws {
+        let item = outbox.filter(id == spanId)
+        try db.run(item.delete())
     }
     
-    /// Mark a span as failed and schedule retry with exponential backoff
-    public func markFailed(id: String, error: Error) throws {
-        let entry = outbox.filter(self.id == id)
+    public func markFailure(spanId: String, backoffSeconds: TimeInterval = 60) throws {
+        let item = outbox.filter(id == spanId)
         
-        guard let row = try db.pluck(entry) else {
-            throw OutboxError.notFound
+        guard let row = try db.pluck(item) else {
+            return
         }
         
         let currentTries = row[tries]
@@ -149,6 +141,12 @@ public final class OutboxStore: @unchecked Sendable {
         let nextAttempt = Date().addingTimeInterval(backoffSeconds)
         
         try db.run(entry.update(
+        // Exponential backoff with jitter and max 30 minutes
+        let baseBackoff = min(backoffSeconds * pow(2.0, Double(newTries)), 1800)
+        let jitter = Double.random(in: 0...0.3) * baseBackoff
+        let nextAttempt = Date().addingTimeInterval(baseBackoff + jitter)
+        
+        try db.run(item.update(
             self.tries <- newTries,
             self.nextAttemptAt <- nextAttempt
         ))
@@ -162,5 +160,23 @@ public final class OutboxStore: @unchecked Sendable {
     /// Clear all entries from the outbox (for testing)
     public func clear() throws {
         try db.run(outbox.delete())
+    public func pendingCount() throws -> Int {
+        return try db.scalar(outbox.count)
+    }
+    
+    // MARK: - Key-Value Store
+    
+    public func setValue(_ value: String, forKey key: String) throws {
+        let row = kv.filter(self.key == key)
+        if try db.pluck(row) != nil {
+            try db.run(row.update(self.valueJson <- value))
+        } else {
+            try db.run(kv.insert(self.key <- key, self.valueJson <- value))
+        }
+    }
+    
+    public func getValue(forKey key: String) throws -> String? {
+        let row = kv.filter(self.key == key)
+        return try db.pluck(row)?[valueJson]
     }
 }
