@@ -1,0 +1,3 @@
+module CausableSDK {
+    header "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/include/CausableSDK-Swift.h"
+}

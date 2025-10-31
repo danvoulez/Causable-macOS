@@ -1,0 +1,33 @@
+{
+  "": {
+    "swift-dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/master.swiftdeps"
+  },
+  "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/Sources/CausableSDK/Client.swift": {
+    "dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Client.d",
+    "object": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Client.swift.o",
+    "swiftmodule": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Client~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Client.swiftdeps",
+    "diagnostics": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Client.dia"
+  },
+  "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/Sources/CausableSDK/Envelope.swift": {
+    "dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Envelope.d",
+    "object": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Envelope.swift.o",
+    "swiftmodule": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Envelope~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Envelope.swiftdeps",
+    "diagnostics": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Envelope.dia"
+  },
+  "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/Sources/CausableSDK/Outbox.swift": {
+    "dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Outbox.d",
+    "object": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Outbox.swift.o",
+    "swiftmodule": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Outbox~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Outbox.swiftdeps",
+    "diagnostics": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Outbox.dia"
+  },
+  "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/Sources/CausableSDK/Signer.swift": {
+    "dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Signer.d",
+    "object": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Signer.swift.o",
+    "swiftmodule": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Signer~partial.swiftmodule",
+    "swift-dependencies": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Signer.swiftdeps",
+    "diagnostics": "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDK.build/Signer.dia"
+  }
+}

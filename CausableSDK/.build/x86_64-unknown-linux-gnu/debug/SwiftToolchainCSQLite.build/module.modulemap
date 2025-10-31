@@ -1,0 +1,4 @@
+module SwiftToolchainCSQLite {
+    umbrella "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/checkouts/swift-toolchain-sqlite/Sources/CSQLite/include"
+    export *
+}

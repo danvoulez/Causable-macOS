@@ -1,0 +1,3 @@
+module CausableSDKPackageDiscoveredTests {
+    header "/home/runner/work/Causable-macOS/Causable-macOS/CausableSDK/.build/x86_64-unknown-linux-gnu/debug/CausableSDKPackageDiscoveredTests.build/include/CausableSDKPackageDiscoveredTests-Swift.h"
+}
