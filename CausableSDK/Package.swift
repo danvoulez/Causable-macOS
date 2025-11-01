@@ -15,7 +15,6 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/stephencelis/SQLite.swift.git", from: "0.15.0"),
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0")
     ],
     targets: [
@@ -23,7 +22,6 @@ let package = Package(
             name: "CausableSDK",
             dependencies: [
                 .product(name: "SQLite", package: "SQLite.swift"),
-                .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "Crypto", package: "swift-crypto")
             ]),
         .testTarget(
