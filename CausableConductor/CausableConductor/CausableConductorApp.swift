@@ -38,6 +38,12 @@ struct SettingsView: View {
     @State private var isRefreshing = false
     @State private var isDraining = false
     
+    // Configuration
+    private let documentationURL = "https://github.com/danvoulez/Causable-macOS"
+    
+    // Persistent mock device ID for consistency
+    @AppStorage("mockDeviceId") private var storedMockDeviceId: String = ""
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header with icon and title
@@ -192,8 +198,14 @@ struct SettingsView: View {
                 
                 Spacer()
                 
-                Link("Documentation", destination: URL(string: "https://github.com/danvoulez/Causable-macOS")!)
-                    .font(.caption)
+                if let url = URL(string: documentationURL) {
+                    Link("Documentation", destination: url)
+                        .font(.caption)
+                } else {
+                    Text("Documentation")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -201,6 +213,11 @@ struct SettingsView: View {
         }
         .frame(width: 450, height: 600)
         .onAppear {
+            // Generate or load persistent mock device ID
+            if storedMockDeviceId.isEmpty {
+                storedMockDeviceId = "dev-\(UUID().uuidString.prefix(8))"
+            }
+            deviceId = storedMockDeviceId
             refreshStatus()
         }
     }
@@ -210,10 +227,10 @@ struct SettingsView: View {
         isRefreshing = true
         
         // TODO: Implement actual status refresh via XPC
+        // For now, use mock data
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             healthStatus = "Connected"
             isEnrolled = true
-            deviceId = "dev-\(UUID().uuidString.prefix(8))"
             lastSync = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .short)
             isRefreshing = false
         }
