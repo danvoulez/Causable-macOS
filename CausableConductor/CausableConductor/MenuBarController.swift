@@ -1,5 +1,6 @@
 import Cocoa
 import AppKit
+import UserNotifications
 
 class MenuBarController: NSObject {
     private var statusItem: NSStatusItem?
@@ -9,21 +10,16 @@ class MenuBarController: NSObject {
     private var isConnected = false
     private var pendingCount = 0
     
-    // Menu item indices for easy reference
-    private enum MenuIndex: Int {
-        case connectionStatus = 0
-        case observerStatus = 1
-        case separator1 = 2
-        case toggleObserver = 3
-        case drainOutbox = 4
-        case separator2 = 5
-        case about = 6
-        case settings = 7
-        case separator3 = 8
-        case quit = 9
-    }
+    // Store references to menu items instead of using indices
+    private weak var connectionStatusItem: NSMenuItem?
+    private weak var observerStatusItem: NSMenuItem?
+    private weak var toggleObserverItem: NSMenuItem?
+    private weak var drainOutboxItem: NSMenuItem?
     
     func setup() {
+        // Request notification permissions
+        requestNotificationPermissions()
+        
         // Create menu bar item with enhanced visuals
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
@@ -52,6 +48,15 @@ class MenuBarController: NSObject {
         }
     }
     
+    private func requestNotificationPermissions() {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error = error {
+                NSLog("Notification permission error: \(error)")
+            }
+        }
+    }
+    
     private func buildMenu() {
         menu = NSMenu()
         menu?.autoenablesItems = false
@@ -60,11 +65,13 @@ class MenuBarController: NSObject {
         let connectionItem = NSMenuItem(title: "⚪️ Connecting...", action: nil, keyEquivalent: "")
         connectionItem.isEnabled = false
         menu?.addItem(connectionItem)
+        connectionStatusItem = connectionItem
         
         // Observer Status
         let observerItem = NSMenuItem(title: "👁 Observer: Active", action: nil, keyEquivalent: "")
         observerItem.isEnabled = false
         menu?.addItem(observerItem)
+        observerStatusItem = observerItem
         
         menu?.addItem(NSMenuItem.separator())
         
@@ -73,6 +80,7 @@ class MenuBarController: NSObject {
         pauseItem.target = self
         pauseItem.isEnabled = true
         menu?.addItem(pauseItem)
+        toggleObserverItem = pauseItem
         
         // Drain Outbox
         let drainItem = NSMenuItem(title: "📤 Drain Outbox", action: #selector(drainOutbox), keyEquivalent: "d")
@@ -80,6 +88,7 @@ class MenuBarController: NSObject {
         drainItem.isEnabled = true
         drainItem.toolTip = "Manually upload pending spans"
         menu?.addItem(drainItem)
+        drainOutboxItem = drainItem
         
         menu?.addItem(NSMenuItem.separator())
         
@@ -132,25 +141,25 @@ class MenuBarController: NSObject {
     
     private func updateObserverUI(running: Bool) {
         if running {
-            menu?.item(at: MenuIndex.toggleObserver.rawValue)?.title = "⏸ Pause Observer"
-            menu?.item(at: MenuIndex.observerStatus.rawValue)?.title = "👁 Observer: Active"
+            toggleObserverItem?.title = "⏸ Pause Observer"
+            observerStatusItem?.title = "👁 Observer: Active"
             statusItem?.button?.image = NSImage(systemSymbolName: "chart.line.uptrend.xyaxis", accessibilityDescription: "Active")
         } else {
-            menu?.item(at: MenuIndex.toggleObserver.rawValue)?.title = "▶️ Resume Observer"
-            menu?.item(at: MenuIndex.observerStatus.rawValue)?.title = "⏸ Observer: Paused"
+            toggleObserverItem?.title = "▶️ Resume Observer"
+            observerStatusItem?.title = "⏸ Observer: Paused"
             statusItem?.button?.image = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: "Paused")
         }
     }
     
     @objc private func drainOutbox() {
         // Disable button during operation
-        menu?.item(at: MenuIndex.drainOutbox.rawValue)?.isEnabled = false
-        menu?.item(at: MenuIndex.drainOutbox.rawValue)?.title = "📤 Draining..."
+        drainOutboxItem?.isEnabled = false
+        drainOutboxItem?.title = "📤 Draining..."
         
         xpcConnection?.drainOutbox { [weak self] success in
             DispatchQueue.main.async {
-                self?.menu?.item(at: MenuIndex.drainOutbox.rawValue)?.isEnabled = true
-                self?.menu?.item(at: MenuIndex.drainOutbox.rawValue)?.title = "📤 Drain Outbox"
+                self?.drainOutboxItem?.isEnabled = true
+                self?.drainOutboxItem?.title = "📤 Drain Outbox"
                 
                 if success {
                     self?.showNotification(title: "Outbox Drained", message: "Pending spans have been uploaded")
@@ -212,11 +221,11 @@ class MenuBarController: NSObject {
                     
                     // Update connection status
                     let connectionText = enrolled ? "🟢 Connected" : "🟡 Not Enrolled"
-                    self.menu?.item(at: MenuIndex.connectionStatus.rawValue)?.title = connectionText
+                    self.connectionStatusItem?.title = connectionText
                     
                     // Update observer status with pending count
                     if pending > 0 {
-                        self.menu?.item(at: MenuIndex.observerStatus.rawValue)?.title = "📊 \(pending) spans pending"
+                        self.observerStatusItem?.title = "📊 \(pending) spans pending"
                         // Update menu bar icon badge (if possible)
                         self.statusItem?.button?.toolTip = "Causable Conductor - \(pending) pending"
                     } else {
@@ -226,7 +235,7 @@ class MenuBarController: NSObject {
                 } else {
                     // Connection failed
                     self.isConnected = false
-                    self.menu?.item(at: MenuIndex.connectionStatus.rawValue)?.title = "🔴 Disconnected"
+                    self.connectionStatusItem?.title = "🔴 Disconnected"
                     self.statusItem?.button?.toolTip = "Causable Conductor - Offline"
                 }
             }
@@ -234,11 +243,21 @@ class MenuBarController: NSObject {
     }
     
     private func showNotification(title: String, message: String) {
-        let notification = NSUserNotification()
-        notification.title = title
-        notification.informativeText = message
-        notification.soundName = nil // Silent notification
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = message
+        content.sound = nil // Silent notification
         
-        NSUserNotificationCenter.default.deliver(notification)
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                NSLog("Notification error: \(error)")
+            }
+        }
     }
 }
