@@ -45,6 +45,11 @@ public final class OutboxStore: @unchecked Sendable {
     private let tries = Expression<Int>("tries")
     private let nextAttemptAt = Expression<Date>("next_attempt_at")
     
+    // KV store table for configuration and credentials
+    private let kv = Table("kv")
+    private let key = Expression<String>("key")
+    private let valueJson = Expression<String>("value_json")
+    
     /// Initialize the outbox store with a database file path
     public init(path: String) throws {
         do {
@@ -71,6 +76,12 @@ public final class OutboxStore: @unchecked Sendable {
         
         // Create index on next_attempt_at for efficient querying
         try db.run(outbox.createIndex(nextAttemptAt, ifNotExists: true))
+        
+        // Create KV store table
+        try db.run(kv.create(ifNotExists: true) { t in
+            t.column(key, primaryKey: true)
+            t.column(valueJson)
+        })
     }
     
     /// Enqueue a span for upload
@@ -169,5 +180,41 @@ public final class OutboxStore: @unchecked Sendable {
     /// Clear all entries from the outbox (for testing)
     public func clear() throws {
         try db.run(outbox.delete())
+    }
+    
+    // MARK: - KV Store Methods
+    
+    /// Set a value in the KV store
+    public func setValue(_ value: String, forKey storeKey: String) throws {
+        let query = kv.filter(key == storeKey)
+        
+        do {
+            if try db.pluck(query) != nil {
+                // Update existing
+                try db.run(query.update(valueJson <- value))
+            } else {
+                // Insert new
+                try db.run(kv.insert(key <- storeKey, valueJson <- value))
+            }
+        } catch {
+            throw OutboxError.databaseError("Failed to set value: \(error)")
+        }
+    }
+    
+    /// Get a value from the KV store
+    public func getValue(forKey storeKey: String) throws -> String? {
+        let query = kv.filter(key == storeKey)
+        
+        guard let row = try db.pluck(query) else {
+            return nil
+        }
+        
+        return row[valueJson]
+    }
+    
+    /// Remove a value from the KV store
+    public func removeValue(forKey storeKey: String) throws {
+        let query = kv.filter(key == storeKey)
+        try db.run(query.delete())
     }
 }

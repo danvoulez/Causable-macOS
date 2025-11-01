@@ -61,7 +61,7 @@ class NotaryXPCService: NSObject, NotaryXPCProtocol {
         
         self.client = CausableClient(
             baseURL: baseURL,
-            tokenProvider: { [weak self] in self?.deviceToken },
+            tokenProvider: { [weak self] in self?.deviceToken ?? "" },
             signer: signer,
             outbox: outbox
         )
@@ -116,7 +116,7 @@ class NotaryXPCService: NSObject, NotaryXPCProtocol {
     
     private func drainOutboxAsync() async {
         guard let client = self.client else { return }
-        await client.drainOutbox()
+        await client.processOutbox()
     }
     
     // MARK: - NotaryXPCProtocol Implementation
@@ -132,15 +132,29 @@ class NotaryXPCService: NSObject, NotaryXPCProtocol {
                 let decoder = JSONDecoder()
                 var spanEnvelope = try decoder.decode(SpanEnvelope.self, from: span)
                 
-                // Ensure metadata has device info
-                if spanEnvelope.metadata.deviceId == nil {
-                    spanEnvelope.metadata = SpanEnvelope.Metadata(
-                        tenantId: self.tenantId,
-                        ownerId: self.ownerId,
-                        deviceId: self.deviceId,
-                        ts: spanEnvelope.metadata.ts
-                    )
-                }
+                // Ensure metadata has device info - create new metadata if needed
+                let updatedMetadata = SpanMetadata(
+                    tenantId: spanEnvelope.metadata.tenantId ?? self.tenantId,
+                    ownerId: spanEnvelope.metadata.ownerId ?? self.ownerId,
+                    deviceId: spanEnvelope.metadata.deviceId ?? self.deviceId,
+                    ts: spanEnvelope.metadata.ts
+                )
+                
+                // Create new span with updated metadata
+                spanEnvelope = SpanEnvelope(
+                    id: spanEnvelope.id,
+                    entityType: spanEnvelope.entityType,
+                    who: spanEnvelope.who,
+                    did: spanEnvelope.did,
+                    this: spanEnvelope.this,
+                    status: spanEnvelope.status,
+                    input: spanEnvelope.input,
+                    output: spanEnvelope.output,
+                    metadata: updatedMetadata,
+                    visibility: spanEnvelope.visibility,
+                    digest: spanEnvelope.digest,
+                    signature: spanEnvelope.signature
+                )
                 
                 // Ingest the span (this will sign, store in outbox, and attempt upload)
                 _ = try await client.ingest(span: spanEnvelope)
@@ -179,7 +193,7 @@ class NotaryXPCService: NSObject, NotaryXPCProtocol {
             "version": "1.0.0",
             "enrolled": deviceToken != nil,
             "signer": signer != nil ? "active" : "inactive",
-            "outbox_pending": (try? outbox?.pendingCount()) ?? 0,
+            "outbox_pending": (try? outbox?.count()) ?? 0,
             "device_id": deviceId ?? "none"
         ]
         
@@ -192,7 +206,7 @@ class NotaryXPCService: NSObject, NotaryXPCProtocol {
     }
     
     func outboxStatus(_ reply: @escaping (Int) -> Void) {
-        let count = (try? outbox?.pendingCount()) ?? 0
+        let count = (try? outbox?.count()) ?? 0
         reply(count)
     }
     
@@ -224,7 +238,7 @@ class NotaryXPCService: NSObject, NotaryXPCProtocol {
                 
                 let tempClient = CausableClient(
                     baseURL: baseURL,
-                    tokenProvider: { nil },
+                    tokenProvider: { "" },
                     signer: signer,
                     outbox: outbox
                 )
