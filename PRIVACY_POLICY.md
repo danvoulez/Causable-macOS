@@ -385,10 +385,12 @@ For privacy-related questions, concerns, or requests:
 **Mail**: 
 ```
 Causable Privacy Team
-[Your Address]
+[TODO: Replace with your actual mailing address]
 [City, State ZIP]
 [Country]
 ```
+
+**Note**: You must provide a valid mailing address before publishing this privacy policy.
 
 **Response Time**: We aim to respond within 2 business days.
 

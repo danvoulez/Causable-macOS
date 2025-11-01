@@ -228,6 +228,8 @@ struct SettingsView: View {
         
         // TODO: Implement actual status refresh via XPC
         // For now, use mock data
+        // Note: Using prefix(8) of UUID for display purposes only
+        // In production, full device ID comes from enrollment
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             healthStatus = "Connected"
             isEnrolled = true

@@ -356,7 +356,12 @@ If your app requires login or enrollment:
 **Username**: `demo@causable.dev`
 **Password**: `demo-password-123`
 
-Provide a working demo account for reviewers.
+**Security Note**: These are example credentials for documentation purposes only. 
+- Create a secure, isolated demo account specifically for App Review
+- Use a strong, unique password different from any production accounts
+- Consider using environment variables or secure storage for actual credentials
+- Never commit real credentials to source control
+- Rotate credentials after each review cycle
 
 ### 6.3 Notes
 

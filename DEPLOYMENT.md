@@ -158,12 +158,15 @@ Verify presence of:
 
 ```bash
 # Sign XPC service first
+# NOTE: Replace 'YOUR NAME (TEAMID)' with your actual Developer ID
+# Example: "Developer ID Application: John Smith (ABC123XYZ)"
 codesign --force --sign "Developer ID Application: YOUR NAME (TEAMID)" \
     --options runtime \
     --entitlements NotaryXPCService.entitlements \
     build/export/CausableConductor.app/Contents/XPCServices/NotaryXPCService.xpc
 
 # Sign main app
+# NOTE: Replace 'YOUR NAME (TEAMID)' with your actual Developer ID
 codesign --force --sign "Developer ID Application: YOUR NAME (TEAMID)" \
     --options runtime \
     --entitlements CausableConductor.entitlements \
