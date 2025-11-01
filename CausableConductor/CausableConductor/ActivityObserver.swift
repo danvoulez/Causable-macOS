@@ -137,7 +137,7 @@ class ActivityObserver {
     private func createActivitySpan(app: String, window: String) -> SpanEnvelope {
         let now = ISO8601DateFormatter().string(from: Date())
         
-        let metadata = SpanEnvelope.Metadata(
+        let metadata = SpanMetadata(
             tenantId: nil,
             ownerId: nil,
             deviceId: nil,
@@ -150,13 +150,14 @@ class ActivityObserver {
         ]
         
         return SpanEnvelope(
+            id: UUID().uuidString,
             entityType: "activity",
             who: "observer:menubar@1.0.0",
             did: "focused",
             this: "device:local",
             status: "complete",
             input: input,
-            output: [:],
+            output: nil,
             metadata: metadata,
             visibility: "private"
         )

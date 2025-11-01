@@ -37,9 +37,6 @@ public struct SpanMetadata: Codable, Equatable, Sendable {
 
 /// Canonical span envelope as defined in the Blueprint
 public struct SpanEnvelope: Codable, Equatable, Sendable {
-// MARK: - Span Envelope
-
-public struct SpanEnvelope: Codable {
     public let id: String
     public let entityType: String
     public let who: String
@@ -49,9 +46,6 @@ public struct SpanEnvelope: Codable {
     public let input: [String: AnyCodable]?
     public let output: [String: AnyCodable]?
     public let metadata: SpanMetadata
-    public var input: [String: AnyCodable]
-    public var output: [String: AnyCodable]
-    public var metadata: Metadata
     public let visibility: String
     public var digest: String?
     public var signature: Signature?
@@ -73,47 +67,6 @@ public struct SpanEnvelope: Codable {
     
     public init(
         id: String,
-    public struct Metadata: Codable {
-        public let tenantId: String?
-        public let ownerId: String?
-        public let deviceId: String?
-        public let ts: String
-        
-        enum CodingKeys: String, CodingKey {
-            case tenantId = "tenant_id"
-            case ownerId = "owner_id"
-            case deviceId = "device_id"
-            case ts
-        }
-        
-        public init(tenantId: String?, ownerId: String?, deviceId: String?, ts: String) {
-            self.tenantId = tenantId
-            self.ownerId = ownerId
-            self.deviceId = deviceId
-            self.ts = ts
-        }
-    }
-    
-    public struct Signature: Codable {
-        public let algo: String
-        public let pubkey: String
-        public let sig: String
-        
-        public init(algo: String, pubkey: String, sig: String) {
-            self.algo = algo
-            self.pubkey = pubkey
-            self.sig = sig
-        }
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case entityType = "entity_type"
-        case who, did, this, status, input, output, metadata, visibility, digest, signature
-    }
-    
-    public init(
-        id: String = UUID().uuidString,
         entityType: String,
         who: String,
         did: String,
@@ -125,10 +78,6 @@ public struct SpanEnvelope: Codable {
         visibility: String,
         digest: String? = nil,
         signature: Signature? = nil
-        input: [String: AnyCodable] = [:],
-        output: [String: AnyCodable] = [:],
-        metadata: Metadata,
-        visibility: String = "private"
     ) {
         self.id = id
         self.entityType = entityType
@@ -145,14 +94,9 @@ public struct SpanEnvelope: Codable {
     }
 }
 
-/// A type-erased codable value wrapper to support dynamic JSON structures
-public struct AnyCodable: Codable, Equatable, Sendable {
-    }
-}
-
 // MARK: - AnyCodable
 
-public struct AnyCodable: Codable {
+public struct AnyCodable: Codable, Sendable {
     public let value: Any
     
     public init(_ value: Any) {
@@ -162,25 +106,6 @@ public struct AnyCodable: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         
-        if let bool = try? container.decode(Bool.self) {
-            value = bool
-        } else if let int = try? container.decode(Int.self) {
-            value = int
-        } else if let double = try? container.decode(Double.self) {
-            value = double
-        } else if let string = try? container.decode(String.self) {
-            value = string
-        } else if let array = try? container.decode([AnyCodable].self) {
-            value = array.map { $0.value }
-        } else if let dict = try? container.decode([String: AnyCodable].self) {
-            value = dict.mapValues { $0.value }
-        } else if container.decodeNil() {
-            value = NSNull()
-        } else {
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Unsupported type"
-            )
         if container.decodeNil() {
             self.value = NSNull()
         } else if let bool = try? container.decode(Bool.self) {
@@ -203,61 +128,51 @@ public struct AnyCodable: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         
-        switch value {
-        case is NSNull:
+        if value is NSNull {
             try container.encodeNil()
-        case let bool as Bool:
+        } else if let bool = value as? Bool {
             try container.encode(bool)
-        case let int as Int:
+        } else if let int = value as? Int {
             try container.encode(int)
-        case let double as Double:
+        } else if let double = value as? Double {
             try container.encode(double)
-        case let string as String:
+        } else if let string = value as? String {
             try container.encode(string)
-        case let array as [Any]:
+        } else if let array = value as? [Any] {
             try container.encode(array.map { AnyCodable($0) })
-        case let dict as [String: Any]:
-            try container.encode(dict.mapValues { AnyCodable($0) })
-        case is NSNull:
-            try container.encodeNil()
-        default:
+        } else if let dictionary = value as? [String: Any] {
+            try container.encode(dictionary.mapValues { AnyCodable($0) })
+        } else {
             throw EncodingError.invalidValue(
                 value,
-                EncodingError.Context(
-                    codingPath: container.codingPath,
-                    debugDescription: "Unsupported type"
-                )
+                EncodingError.Context(codingPath: [], debugDescription: "Unsupported type")
             )
         }
     }
-    
+}
+
+extension AnyCodable: Equatable {
     public static func == (lhs: AnyCodable, rhs: AnyCodable) -> Bool {
-        // Compare values based on their actual types
         switch (lhs.value, rhs.value) {
-        case let (l as Bool, r as Bool):
-            return l == r
-        case let (l as Int, r as Int):
-            return l == r
-        case let (l as Double, r as Double):
-            return l == r
-        case let (l as String, r as String):
-            return l == r
-        case let (l as [Any], r as [Any]):
-            guard l.count == r.count else { return false }
-            return zip(l, r).allSatisfy { AnyCodable($0) == AnyCodable($1) }
-        case let (l as [String: Any], r as [String: Any]):
-            guard l.keys.sorted() == r.keys.sorted() else { return false }
-            return l.keys.allSatisfy { key in
-                guard let lval = l[key], let rval = r[key] else { return false }
-                return AnyCodable(lval) == AnyCodable(rval)
-            }
         case (is NSNull, is NSNull):
             return true
+        case (let left as Bool, let right as Bool):
+            return left == right
+        case (let left as Int, let right as Int):
+            return left == right
+        case (let left as Double, let right as Double):
+            return left == right
+        case (let left as String, let right as String):
+            return left == right
+        case (let left as [Any], let right as [Any]):
+            return left.count == right.count && zip(left, right).allSatisfy { AnyCodable($0) == AnyCodable($1) }
+        case (let left as [String: Any], let right as [String: Any]):
+            return left.count == right.count && left.allSatisfy { key, value in
+                guard let rightValue = right[key] else { return false }
+                return AnyCodable(value) == AnyCodable(rightValue)
+            }
         default:
             return false
-        default:
-            let context = EncodingError.Context(codingPath: container.codingPath, debugDescription: "Unsupported type")
-            throw EncodingError.invalidValue(value, context)
         }
     }
 }

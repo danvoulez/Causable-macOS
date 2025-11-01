@@ -9,15 +9,15 @@ public enum OutboxError: Error {
     case notFound
 }
 
-/// Represents a span in the outbox queue
-public struct OutboxEntry: Sendable {
+/// Represents an entry in the outbox
+public struct OutboxEntry {
     public let id: String
     public let digest: String
     public let spanJson: String
     public let tries: Int
     public let nextAttemptAt: Date
     
-    public init(id: String, digest: String, spanJson: String, tries: Int = 0, nextAttemptAt: Date = Date()) {
+    public init(id: String, digest: String, spanJson: String, tries: Int, nextAttemptAt: Date) {
         self.id = id
         self.digest = digest
         self.spanJson = spanJson
@@ -26,7 +26,6 @@ public struct OutboxEntry: Sendable {
     }
 }
 
-/// Configuration constants for outbox retry behavior
 private enum OutboxConfig {
     /// Base backoff time in seconds
     static let baseBackoffSeconds: Double = 60.0
@@ -39,17 +38,17 @@ public final class OutboxStore: @unchecked Sendable {
     private let db: Connection
     
     // Table definition
-// MARK: - Outbox Store
-
-public final class OutboxStore {
-    private let db: Connection
-    
     private let outbox = Table("outbox")
     private let id = Expression<String>("id")
     private let digest = Expression<String>("digest")
     private let spanJson = Expression<String>("span_json")
     private let tries = Expression<Int>("tries")
     private let nextAttemptAt = Expression<Date>("next_attempt_at")
+    
+    // KV store table for configuration and credentials
+    private let kv = Table("kv")
+    private let key = Expression<String>("key")
+    private let valueJson = Expression<String>("value_json")
     
     /// Initialize the outbox store with a database file path
     public init(path: String) throws {
@@ -67,44 +66,50 @@ public final class OutboxStore {
     }
     
     private func createTableIfNeeded() throws {
-    private let kv = Table("kv")
-    private let key = Expression<String>("key")
-    private let valueJson = Expression<String>("value_json")
-    
-    public init(path: String) throws {
-        self.db = try Connection(path)
-        try createTables()
-    }
-    
-    private func createTables() throws {
         try db.run(outbox.create(ifNotExists: true) { t in
             t.column(id, primaryKey: true)
             t.column(digest, unique: true)
             t.column(spanJson)
             t.column(tries, defaultValue: 0)
-            t.column(nextAttemptAt)
+            t.column(nextAttemptAt, defaultValue: Date())
         })
         
+        // Create index on next_attempt_at for efficient querying
         try db.run(outbox.createIndex(nextAttemptAt, ifNotExists: true))
         
+        // Create KV store table
         try db.run(kv.create(ifNotExists: true) { t in
             t.column(key, primaryKey: true)
             t.column(valueJson)
         })
     }
     
-    public func enqueue(spanId: String, digest: String, spanJson: String) throws {
-        let row = outbox.insert(
-            self.id <- spanId,
-            self.digest <- digest,
-            self.spanJson <- spanJson,
-            self.tries <- 0,
-            self.nextAttemptAt <- Date()
-        )
-        try db.run(row)
+    /// Enqueue a span for upload
+    public func enqueue(span: SpanEnvelope) throws {
+        let encoder = JSONEncoder.causableCanonical
+        guard let json = try? encoder.encode(span),
+              let jsonString = String(data: json, encoding: .utf8) else {
+            throw OutboxError.encodingError
+        }
+        
+        // Use the span's existing digest if available, otherwise compute one
+        let digestValue = span.digest ?? DigestUtils.computeDigest(json)
+        
+        do {
+            try db.run(outbox.insert(
+                id <- span.id,
+                digest <- digestValue,
+                spanJson <- jsonString,
+                tries <- 0,
+                nextAttemptAt <- Date()
+            ))
+        } catch {
+            throw OutboxError.databaseError("Failed to enqueue: \(error)")
+        }
     }
     
-    public func nextAttempt() throws -> (id: String, spanJson: String)? {
+    /// Get the next span ready for upload attempt
+    public func nextAttempt() throws -> OutboxEntry? {
         let now = Date()
         let query = outbox
             .filter(nextAttemptAt <= now)
@@ -115,44 +120,59 @@ public final class OutboxStore {
             return nil
         }
         
-        return (id: row[id], spanJson: row[spanJson])
+        return OutboxEntry(
+            id: row[id],
+            digest: row[digest],
+            spanJson: row[spanJson],
+            tries: row[tries],
+            nextAttemptAt: row[nextAttemptAt]
+        )
     }
     
-    public func markSuccess(spanId: String) throws {
-        let item = outbox.filter(id == spanId)
-        try db.run(item.delete())
+    /// Mark a span as successfully sent (removes from outbox)
+    public func markSent(id spanId: String) throws {
+        let entry = outbox.filter(id == spanId)
+        do {
+            try db.run(entry.delete())
+        } catch {
+            throw OutboxError.databaseError("Failed to delete: \(error)")
+        }
     }
     
-    public func markFailure(spanId: String, backoffSeconds: TimeInterval = 60) throws {
-        let item = outbox.filter(id == spanId)
+    /// Mark a span upload as failed, schedule retry with exponential backoff
+    public func markFailed(id spanId: String, error: Error) throws {
+        let entry = outbox.filter(id == spanId)
         
-        guard let row = try db.pluck(item) else {
-            return
+        guard let row = try db.pluck(entry) else {
+            throw OutboxError.notFound
         }
         
         let currentTries = row[tries]
         let newTries = currentTries + 1
         
-        // Exponential backoff: 1min, 2min, 4min, 8min, 16min, capped at 30min
+        // Calculate backoff with exponential growth
         let backoffSeconds = min(
-            pow(2.0, Double(newTries)) * OutboxConfig.baseBackoffSeconds,
+            OutboxConfig.baseBackoffSeconds * pow(2.0, Double(newTries - 1)),
             OutboxConfig.maxBackoffSeconds
         )
-        let nextAttempt = Date().addingTimeInterval(backoffSeconds)
         
-        try db.run(entry.update(
-        // Exponential backoff with jitter and max 30 minutes
-        let baseBackoff = min(backoffSeconds * pow(2.0, Double(newTries)), 1800)
-        let jitter = Double.random(in: 0...0.3) * baseBackoff
-        let nextAttempt = Date().addingTimeInterval(baseBackoff + jitter)
+        // Add jitter (±20%)
+        let jitter = Double.random(in: 0.8...1.2)
+        let finalBackoff = backoffSeconds * jitter
         
-        try db.run(item.update(
-            self.tries <- newTries,
-            self.nextAttemptAt <- nextAttempt
-        ))
+        let nextAttempt = Date().addingTimeInterval(finalBackoff)
+        
+        do {
+            try db.run(entry.update(
+                tries <- newTries,
+                nextAttemptAt <- nextAttempt
+            ))
+        } catch {
+            throw OutboxError.databaseError("Failed to update: \(error)")
+        }
     }
     
-    /// Get the current size of the outbox
+    /// Get the number of pending spans in the outbox
     public func count() throws -> Int {
         return try db.scalar(outbox.count)
     }
@@ -160,23 +180,41 @@ public final class OutboxStore {
     /// Clear all entries from the outbox (for testing)
     public func clear() throws {
         try db.run(outbox.delete())
-    public func pendingCount() throws -> Int {
-        return try db.scalar(outbox.count)
     }
     
-    // MARK: - Key-Value Store
+    // MARK: - KV Store Methods
     
-    public func setValue(_ value: String, forKey key: String) throws {
-        let row = kv.filter(self.key == key)
-        if try db.pluck(row) != nil {
-            try db.run(row.update(self.valueJson <- value))
-        } else {
-            try db.run(kv.insert(self.key <- key, self.valueJson <- value))
+    /// Set a value in the KV store
+    public func setValue(_ value: String, forKey storeKey: String) throws {
+        let query = kv.filter(key == storeKey)
+        
+        do {
+            if try db.pluck(query) != nil {
+                // Update existing
+                try db.run(query.update(valueJson <- value))
+            } else {
+                // Insert new
+                try db.run(kv.insert(key <- storeKey, valueJson <- value))
+            }
+        } catch {
+            throw OutboxError.databaseError("Failed to set value: \(error)")
         }
     }
     
-    public func getValue(forKey key: String) throws -> String? {
-        let row = kv.filter(self.key == key)
-        return try db.pluck(row)?[valueJson]
+    /// Get a value from the KV store
+    public func getValue(forKey storeKey: String) throws -> String? {
+        let query = kv.filter(key == storeKey)
+        
+        guard let row = try db.pluck(query) else {
+            return nil
+        }
+        
+        return row[valueJson]
+    }
+    
+    /// Remove a value from the KV store
+    public func removeValue(forKey storeKey: String) throws {
+        let query = kv.filter(key == storeKey)
+        try db.run(query.delete())
     }
 }
